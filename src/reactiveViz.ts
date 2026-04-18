@@ -48,12 +48,11 @@ export function startReactiveViz(
     rmsSmooth = rmsSmooth * 0.85 + rms * 0.15
     phase += 0.012 + bassSmooth * 0.06 + rmsSmooth * 0.04
 
-    const g = ctx.createLinearGradient(0, 0, w, h * 1.2)
-    const hue1 = (232 + phase * 35 + bassSmooth * 50) % 360
-    const hue2 = (295 + bassSmooth * 70 + rmsSmooth * 40) % 360
-    g.addColorStop(0, `hsla(${hue1}, 58%, 9%, 1)`)
-    g.addColorStop(0.55, `hsla(${hue2}, 45%, 7%, 1)`)
-    g.addColorStop(1, `hsla(${hue1 + 40}, 50%, 5%, 1)`)
+    const g = ctx.createRadialGradient(w * 0.5, h * 0.55, 0, w * 0.5, h * 0.55, Math.max(w, h) * 0.72)
+    g.addColorStop(0, `rgba(40, 8, 8, ${0.35 + bassSmooth * 0.25})`)
+    g.addColorStop(0.35, 'rgba(0, 0, 0, 0.97)')
+    g.addColorStop(0.7, `rgba(0, ${12 + rmsSmooth * 28}, ${18 + bassSmooth * 20}, 0.55)`)
+    g.addColorStop(1, '#000000')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, w, h)
 
@@ -68,18 +67,18 @@ export function startReactiveViz(
       v /= step * 255
       const bh = (0.04 + v * v) * h * 0.38
       const bw = halfW / bars - 0.5
-      const hue = 255 + (i / bars) * 60 + bassSmooth * 40
-      const alpha = 0.12 + v * 0.55
-      ctx.fillStyle = `hsla(${hue}, 85%, 62%, ${alpha})`
+      const hue = (i / bars) * 95 + bassSmooth * 28
+      const alpha = 0.1 + v * 0.58
+      ctx.fillStyle = `hsla(${hue}, 95%, ${46 + v * 24}%, ${alpha})`
       const offset = (i / bars) * halfW
       ctx.fillRect(cx + offset, baseY - bh, bw, bh)
       ctx.fillRect(cx - offset - bw, baseY - bh, bw, bh)
     }
 
     const orbs = [
-      { x: 0.22, y: 0.32, hue: 310 },
-      { x: 0.5, y: 0.28, hue: 265 },
-      { x: 0.78, y: 0.36, hue: 195 },
+      { x: 0.22, y: 0.32, hue: 0 },
+      { x: 0.5, y: 0.28, hue: 115 },
+      { x: 0.78, y: 0.36, hue: 185 },
     ]
     for (let k = 0; k < orbs.length; k++) {
       const o = orbs[k]!
@@ -88,14 +87,14 @@ export function startReactiveViz(
       const rad = 90 + bassSmooth * 220 + k * 30
       const grd = ctx.createRadialGradient(ox, oy, 0, ox, oy, rad)
       const a0 = 0.06 + bassSmooth * 0.22 + rmsSmooth * 0.12
-      grd.addColorStop(0, `hsla(${o.hue}, 92%, 58%, ${a0})`)
-      grd.addColorStop(0.45, `hsla(${o.hue + 25}, 70%, 45%, ${a0 * 0.35})`)
+      grd.addColorStop(0, `hsla(${o.hue}, ${o.hue < 40 ? 100 : 85}%, ${o.hue < 40 ? 52 : 55}%, ${a0})`)
+      grd.addColorStop(0.45, `hsla(${o.hue + 30}, 80%, 42%, ${a0 * 0.32})`)
       grd.addColorStop(1, 'transparent')
       ctx.fillStyle = grd
       ctx.fillRect(0, 0, w, h)
     }
 
-    ctx.strokeStyle = `hsla(270, 40%, 70%, ${0.04 + rmsSmooth * 0.15})`
+    ctx.strokeStyle = `hsla(0, 0%, 100%, ${0.05 + rmsSmooth * 0.14})`
     ctx.lineWidth = 1
     const rings = 5
     for (let r = 0; r < rings; r++) {

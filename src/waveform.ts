@@ -136,6 +136,7 @@ function drawBeatPhaseGridWindowed(
   ctx2d.restore()
 }
 
+/** Tri-stack column: high = hot core (red), mid = yellow, low = neon green (sci‑fi spectrum). */
 function drawTriBandColumn(
   ctx2d: CanvasRenderingContext2D,
   x: number,
@@ -152,14 +153,25 @@ function drawTriBandColumn(
   const hMd = (md / t) * hTotal
   const hHi = (hi / t) * hTotal
   let y0 = midY + hTotal / 2
-  ctx2d.fillStyle = `rgb(${Math.round(110 + 120 * (lo / t))},${Math.round(40 + 70 * (md / t))},${Math.round(140 + 90 * (hi / t))})`
+  const int = (lo + md + hi) / 3
+  const glowA = 0.22 + int * 0.55
+
   y0 -= hHi
+  ctx2d.fillStyle = `rgba(255, 55, 40, ${0.35 + glowA * 0.5})`
+  ctx2d.fillRect(x - 0.5, y0, barW + 1, hHi)
+  ctx2d.fillStyle = `rgb(${Math.round(255)}, ${Math.round(40 + 80 * (md / t))}, ${Math.round(50 + 40 * (hi / t))})`
   ctx2d.fillRect(x, y0, barW, hHi)
-  ctx2d.fillStyle = `rgb(${Math.round(60 + 100 * (lo / t))},${Math.round(120 + 100 * (md / t))},${Math.round(50 + 80 * (hi / t))})`
+
   y0 -= hMd
+  ctx2d.fillStyle = `rgba(240, 255, 60, ${0.2 + glowA * 0.35})`
+  ctx2d.fillRect(x - 0.5, y0, barW + 1, hMd)
+  ctx2d.fillStyle = `rgb(${Math.round(220 + 35 * (lo / t))}, ${Math.round(230 + 25 * (md / t))}, ${Math.round(40 + 30 * (hi / t))})`
   ctx2d.fillRect(x, y0, barW, hMd)
-  ctx2d.fillStyle = `rgb(${Math.round(200 + 55 * (lo / t))},${Math.round(70 + 60 * (md / t))},${Math.round(60 + 40 * (hi / t))})`
+
   y0 -= hLo
+  ctx2d.fillStyle = `rgba(50, 255, 120, ${0.18 + glowA * 0.4})`
+  ctx2d.fillRect(x - 0.5, y0, barW + 1, hLo)
+  ctx2d.fillStyle = `rgb(${Math.round(30 + 70 * (lo / t))}, ${Math.round(240 + 15 * (md / t))}, ${Math.round(90 + 40 * (hi / t))})`
   ctx2d.fillRect(x, y0, barW, hLo)
 }
 
@@ -202,18 +214,21 @@ export function drawWaveform(
       height,
       duration,
       bpmEffective,
-      'rgba(255,255,255,0.32)',
-      'rgba(255,255,255,0.09)',
+      'rgba(255,255,255,0.38)',
+      'rgba(255,60,60,0.2)',
     )
   }
 
   if (duration > 0) {
     const x = (current / duration) * width
-    ctx2d.strokeStyle = playheadColor
-    ctx2d.lineWidth = 2
     ctx2d.beginPath()
     ctx2d.moveTo(x, 0)
     ctx2d.lineTo(x, height)
+    ctx2d.strokeStyle = 'rgba(255, 50, 50, 0.4)'
+    ctx2d.lineWidth = 4
+    ctx2d.stroke()
+    ctx2d.strokeStyle = playheadColor
+    ctx2d.lineWidth = 2
     ctx2d.stroke()
   }
 }
@@ -284,18 +299,21 @@ export function drawWaveformWindowed(
       windowT0,
       windowT1,
       bpmEffective,
-      'rgba(255,255,255,0.36)',
-      'rgba(255,255,255,0.11)',
+      'rgba(255,255,255,0.42)',
+      'rgba(255,60,60,0.22)',
     )
   }
 
   const px = ((current - windowT0) / span) * width
   if (px >= -4 && px <= width + 4) {
-    ctx2d.strokeStyle = playheadColor
-    ctx2d.lineWidth = 2.25
     ctx2d.beginPath()
     ctx2d.moveTo(px + 0.5, 0)
     ctx2d.lineTo(px + 0.5, height)
+    ctx2d.strokeStyle = 'rgba(255, 50, 50, 0.45)'
+    ctx2d.lineWidth = 5
+    ctx2d.stroke()
+    ctx2d.strokeStyle = playheadColor
+    ctx2d.lineWidth = 2
     ctx2d.stroke()
   }
 }

@@ -362,9 +362,9 @@ function drawJogHud(
 
   ctx.beginPath()
   ctx.arc(0, 0, r, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(8,10,18,0.72)'
+  ctx.fillStyle = 'rgba(6,0,0,0.78)'
   ctx.fill()
-  ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+  ctx.strokeStyle = 'rgba(255,60,60,0.35)'
   ctx.lineWidth = 2
   ctx.stroke()
 
@@ -394,7 +394,7 @@ function drawJogHud(
   ctx.stroke()
 
   ctx.rotate(-Math.PI / 2.15)
-  ctx.font = '600 9px system-ui,sans-serif'
+  ctx.font = '600 9px "IBM Plex Serif", Georgia, serif'
   ctx.fillStyle = secondary
   ctx.textAlign = 'center'
   ctx.fillText(snap.deckLine, 0, -r + 14)
@@ -402,9 +402,9 @@ function drawJogHud(
 
   ctx.textAlign = 'center'
   ctx.fillStyle = '#f8fafc'
-  ctx.font = '700 20px system-ui,sans-serif'
+  ctx.font = '700 20px "JetBrains Mono", ui-monospace, monospace'
   ctx.fillText(snap.bpmLine, 0, -8)
-  ctx.font = '10px system-ui,sans-serif'
+  ctx.font = '10px "JetBrains Mono", ui-monospace, monospace'
   ctx.fillStyle = secondary
   ctx.fillText(`${snap.keyLine} · ${snap.tempoKeyLine}`, 0, 10)
 
@@ -418,7 +418,7 @@ function drawJogHud(
   const shortTitle =
     snap.title.length > 22 ? `${snap.title.slice(0, 20)}…` : snap.title
   ctx.fillStyle = 'rgba(226,232,240,0.88)'
-  ctx.font = '9px system-ui,sans-serif'
+  ctx.font = '9px "JetBrains Mono", ui-monospace, monospace'
   ctx.fillText(shortTitle, 0, r - 12)
 
   ctx.restore()
@@ -426,10 +426,15 @@ function drawJogHud(
 
 function drawHud(ctx: CanvasRenderingContext2D, w: number, lines: string[]): void {
   ctx.save()
-  ctx.font = '12px system-ui,sans-serif'
-  ctx.fillStyle = 'rgba(0,0,0,0.55)'
-  ctx.fillRect(8, 8, Math.min(w - 16, 420), 8 + lines.length * 16)
-  ctx.fillStyle = '#e5e7eb'
+  ctx.font = '11px "JetBrains Mono", ui-monospace, monospace'
+  const boxW = Math.min(w - 16, 420)
+  const boxH = 8 + lines.length * 16
+  ctx.fillStyle = 'rgba(0,0,0,0.78)'
+  ctx.fillRect(8, 8, boxW, boxH)
+  ctx.strokeStyle = 'rgba(255, 42, 42, 0.4)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(8.5, 8.5, boxW - 1, boxH - 1)
+  ctx.fillStyle = 'rgba(232, 234, 237, 0.92)'
   let y = 22
   for (const line of lines) {
     ctx.fillText(line, 14, y)
@@ -682,16 +687,16 @@ function frame(): void {
       w,
       h,
       hands.Left,
-      'rgba(244,114,182,0.92)',
-      'rgba(253,224,232,0.95)',
+      'rgba(255,60,60,0.95)',
+      'rgba(255,240,240,0.95)',
     )
     drawHandOverlay(
       ctxOv,
       w,
       h,
       hands.Right,
-      'rgba(45,212,191,0.92)',
-      'rgba(204,251,241,0.95)',
+      'rgba(57,255,106,0.92)',
+      'rgba(220,255,230,0.95)',
     )
 
     const wristLm = (lm: NormalizedLandmark[] | undefined) => lm?.[WRIST]
@@ -699,11 +704,11 @@ function frame(): void {
     const wr = wristLm(hands.Right)
     if (wl) {
       const p = scr(wl, w, h)
-      drawJogHud(ctxOv, p.x, p.y - 96, loopOpts.callbacks.getDeckHud('A'), '#f472b6', 'rgba(253,224,232,0.85)')
+      drawJogHud(ctxOv, p.x, p.y - 96, loopOpts.callbacks.getDeckHud('A'), '#ff2a2a', 'rgba(255, 220, 220, 0.88)')
     }
     if (wr) {
       const p = scr(wr, w, h)
-      drawJogHud(ctxOv, p.x, p.y - 96, loopOpts.callbacks.getDeckHud('B'), '#2dd4bf', 'rgba(204,251,241,0.85)')
+      drawJogHud(ctxOv, p.x, p.y - 96, loopOpts.callbacks.getDeckHud('B'), '#39ff6a', 'rgba(210, 255, 225, 0.88)')
     }
 
     if (!hands.Left && !hands.Right) hud.push('No hands detected')
