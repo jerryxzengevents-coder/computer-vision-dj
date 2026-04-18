@@ -53,22 +53,81 @@ body {
   width: 100%;
   max-width: min(1180px, calc(100vw - 1.5rem));
   margin: 0 auto;
-  padding: 1.25rem clamp(0.75rem, 2vw, 1.5rem) 3rem;
+  padding: 0.85rem clamp(0.65rem, 1.8vw, 1.25rem) 2rem;
   box-sizing: border-box;
   overflow-x: hidden;
 }
 
-.top h1 {
+.camera-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.camera-toolbar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.cam-toolbar-toggle {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.camera-toolbar .sync-status {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.camera-toolbar .hand-status {
+  margin: 0;
+  flex: 0 1 auto;
+  max-width: 12rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top h1.site-title {
   margin: 0 0 0.35rem;
-  font-family: var(--font-serif);
-  font-size: 1.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: clamp(1.35rem, 4vw, 1.85rem);
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--accent);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f8fafc;
   text-shadow:
-    0 0 18px var(--accent-glow),
-    0 0 48px rgba(255, 0, 0, 0.22),
-    0 0 2px rgba(255, 255, 255, 0.35);
+    0 0 20px var(--accent-glow),
+    0 0 2px rgba(255, 255, 255, 0.45),
+    0 0 40px rgba(255, 0, 0, 0.18);
+}
+
+.site-title__primary {
+  color: var(--accent);
+  letter-spacing: 0.18em;
+  text-shadow:
+    0 0 22px var(--accent-glow),
+    0 0 56px rgba(255, 0, 0, 0.2);
+}
+
+.site-title__ver {
+  font-size: 0.55em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--cyber-cyan);
+  text-shadow: 0 0 12px rgba(46, 232, 214, 0.45);
+  opacity: 0.95;
 }
 
 .sub {
@@ -367,10 +426,10 @@ body {
 }
 
 .sync-status {
-  margin: 0.35rem 0 0;
-  min-height: 1.25rem;
+  margin: 0;
+  min-height: 1.15rem;
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   letter-spacing: 0.03em;
   color: var(--cyber-cyan);
   text-shadow: 0 0 10px rgba(46, 232, 214, 0.35);
@@ -452,45 +511,13 @@ body {
 }
 
 .camera-block {
-  margin-top: 1.5rem;
   width: 100%;
   box-sizing: border-box;
 }
 
-.camera-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.5rem;
-}
-
-.camera-title {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #ffffff;
-  text-shadow: 0 0 14px rgba(255, 42, 42, 0.35);
-}
-
-.camera-note {
-  margin: 0 0 0.75rem;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  letter-spacing: 0.03em;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.hand-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.75rem;
+.panel.camera-block {
+  margin-top: 0.55rem;
+  padding: 0.55rem clamp(0.55rem, 1.5vw, 1rem) 0.7rem;
 }
 
 .hand-toggle {
@@ -514,16 +541,16 @@ body {
 
 .video-shell {
   position: relative;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(255, 42, 42, 0.35);
   background: #000000;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 0 32px rgba(255, 0, 0, 0.12);
+    0 0 24px rgba(255, 0, 0, 0.1);
   width: 100%;
-  /* Large preview: viewport-tall hero frame (video uses object-fit: cover) */
-  height: clamp(320px, min(72vh, 92svh - 9rem), 960px);
+  /* Primary camera frame — most of the upper panel */
+  height: clamp(260px, min(68vh, 88svh - 10rem), 900px);
   margin-inline: auto;
 }
 
@@ -572,6 +599,68 @@ body {
   box-shadow:
     0 0 24px rgba(255, 42, 42, 0.15),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.cam-gesture-panel__head {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.cam-gesture-panel__titles {
+  min-width: 0;
+  flex: 1;
+}
+
+.cam-gesture-panel__head .cam-gesture-title {
+  margin-bottom: 0;
+}
+
+.cam-gesture-minimize-btn {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.55rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--cyber-cyan);
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.cam-gesture-minimize-btn:hover {
+  border-color: rgba(46, 232, 214, 0.55);
+  color: #f8fafc;
+}
+
+.cam-gesture-sheet-body {
+  min-height: 0;
+}
+
+.cam-gesture-panel.is-collapsed .cam-gesture-sheet-body {
+  display: none;
+}
+
+.cam-gesture-panel.is-collapsed .cam-gesture-panel__titles {
+  display: none;
+}
+
+.cam-gesture-panel.is-collapsed .cam-gesture-panel__inner {
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  padding: 0.42rem 0.5rem;
+}
+
+.cam-gesture-panel.is-collapsed .cam-gesture-panel__head {
+  margin-bottom: 0;
 }
 
 .cam-gesture-eyebrow {

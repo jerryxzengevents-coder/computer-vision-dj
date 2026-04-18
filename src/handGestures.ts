@@ -424,25 +424,6 @@ function drawJogHud(
   ctx.restore()
 }
 
-function drawHud(ctx: CanvasRenderingContext2D, w: number, lines: string[]): void {
-  ctx.save()
-  ctx.font = '11px "JetBrains Mono", ui-monospace, monospace'
-  const boxW = Math.min(w - 16, 420)
-  const boxH = 8 + lines.length * 16
-  ctx.fillStyle = 'rgba(0,0,0,0.78)'
-  ctx.fillRect(8, 8, boxW, boxH)
-  ctx.strokeStyle = 'rgba(255, 42, 42, 0.4)'
-  ctx.lineWidth = 1
-  ctx.strokeRect(8.5, 8.5, boxW - 1, boxH - 1)
-  ctx.fillStyle = 'rgba(232, 234, 237, 0.92)'
-  let y = 22
-  for (const line of lines) {
-    ctx.fillText(line, 14, y)
-    y += 16
-  }
-  ctx.restore()
-}
-
 function updateEqSliderUi(deck: 'A' | 'B', band: EqBand, db: number): void {
   if (!loopOpts) return
   const inputs = loopOpts.eqInputs[deck]
@@ -468,13 +449,6 @@ function frame(): void {
   const res = lmInst.detectForVideo(video, performance.now())
   const hands = handsByLabel(res.landmarks, res.handedness)
   const now = performance.now()
-
-  const hud: string[] = [
-    'EQ (hold ~0.22s, then wrist up/down): thumb+pinky = low · thumb+ring = mid · thumb+middle = high',
-    'Thumb+index (pointer): hold then wrist ↑/↓ = volume · quick double-tap = play/pause',
-    'Fingers pointed down (playing): wrist left = slow nudge · right = fast (vinyl jog)',
-    'Index tips together → tempo match + auto phase · middle tips → phase only',
-  ]
 
   for (const h of ['Left', 'Right'] as HandLabel[]) {
     const labelLm = hands[h]
@@ -523,7 +497,6 @@ function frame(): void {
         const next = clampDb(st.baseDb - (wristY - st.anchorYN) * EQ_VERTICAL_SENS)
         callbacks.setEq(deck, band, next)
         updateEqSliderUi(deck, band, next)
-        hud.push(`${deck} ${band} EQ (up/down)`)
       }
     }
 
@@ -555,7 +528,6 @@ function frame(): void {
         callbacks.setChannelVolume(deck, next)
         if (deck === 'A') volA.value = String(Math.round(next * 100))
         else volB.value = String(Math.round(next * 100))
-        hud.push(`Vol ${deck}`)
       }
     } else {
       tiVolByHand[h] = null
@@ -578,7 +550,6 @@ function frame(): void {
         const dx = wrist.x - jg.anchorX
         const mult = Math.max(0.92, Math.min(1.08, 1 + dx * JOG_DX_SENS))
         callbacks.setJogTempo(deck, mult)
-        hud.push(`${deck} vinyl jog`)
       } else {
         if (jogByHand[h]) {
           callbacks.resetJogTempo(deck)
@@ -624,8 +595,6 @@ function frame(): void {
     const midSep = dist(leftLm[MIDDLE]!, rightLm[MIDDLE]!)
     const { onPhaseAlign, onTempoMatch } = loopOpts.callbacks
 
-    hud.push(`2-hand dist: idx↔${idxSep.toFixed(2)} · mid↔${midSep.toFixed(2)} (hold near)`)
-
     let twoHandConsumed = false
 
     if (onPhaseAlign) {
@@ -639,7 +608,6 @@ function frame(): void {
           lastPhaseAlignAt = now
           middleTipDwellStart = null
           indexTipDwellStart = null
-          hud.unshift('Middle tips held → phase align (follower → playing deck)')
           twoHandConsumed = true
         }
       } else if (midSep > MIDDLE_TIP_RESET_FAR) {
@@ -660,7 +628,6 @@ function frame(): void {
           lastTempoMatchAt = now
           indexTipDwellStart = null
           middleTipDwellStart = null
-          hud.unshift('Index tips held → tempo + auto phase align')
         }
       } else if (idxSep > INDEX_TIP_RESET_FAR) {
         indexTipDwellStart = null
@@ -711,8 +678,6 @@ function frame(): void {
       drawJogHud(ctxOv, p.x, p.y - 96, loopOpts.callbacks.getDeckHud('B'), '#39ff6a', 'rgba(210, 255, 225, 0.88)')
     }
 
-    if (!hands.Left && !hands.Right) hud.push('No hands detected')
-    drawHud(ctxOv, w, hud)
   }
 
   rafId = requestAnimationFrame(frame)

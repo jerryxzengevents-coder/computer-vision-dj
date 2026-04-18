@@ -162,15 +162,19 @@ export class Deck {
     }
   }
 
-  async loadFile(file: File): Promise<AudioBuffer> {
+  async loadFromArrayBuffer(raw: ArrayBuffer): Promise<AudioBuffer> {
     await this.resume()
     this.stopPlayback()
-    const raw = await file.arrayBuffer()
     this.buffer = await this.context.decodeAudioData(raw.slice(0))
     this.offsetSec = 0
     this.playbackRateValue = 1
     this.jogTempoMultiplier = 1
     return this.buffer
+  }
+
+  async loadFile(file: File): Promise<AudioBuffer> {
+    const raw = await file.arrayBuffer()
+    return this.loadFromArrayBuffer(raw)
   }
 
   async play(): Promise<void> {

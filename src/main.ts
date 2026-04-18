@@ -12,18 +12,21 @@ import {
   disposeHandLandmarker,
   startHandGestureLoop,
   stopHandGestureLoop,
+  type HandGestureLoopOptions,
 } from './handGestures.ts'
 import { createMixer } from './mixer.ts'
-import { startReactiveViz } from './reactiveViz.ts'
+import { startReactiveViz, type VizUiSnapshot } from './reactiveViz.ts'
 import {
   computePeaks,
+  computeSignedMinMaxBins,
   computeTriBandPeaks,
   drawWaveformWindowed,
+  type SignedMmBins,
   type TriBandPeaks,
 } from './waveform.ts'
 import { startWebcamPreview, stopWebcamPreview } from './webcam.ts'
 
-const WAVEFORM_BINS = 600
+const WAVEFORM_BINS = 1600
 /** CSS pixel height for beat-grid zoom waveforms (top of performance panel). */
 const ZOOM_WAVE_CSS_H = 132
 
@@ -57,7 +60,6 @@ const deckA = new Deck(mixer.context, mixer.channelGainA)
 const deckB = new Deck(mixer.context, mixer.channelGainB)
 
 const vizCanvas = document.querySelector<HTMLCanvasElement>('#reactive-viz')!
-startReactiveViz(mixer.analyser, vizCanvas)
 
 const playIcon = `<svg class="transport-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>`
 const pauseIcon = `<svg class="transport-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>`
@@ -65,9 +67,90 @@ const pauseIcon = `<svg class="transport-svg" viewBox="0 0 24 24" aria-hidden="t
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
   <header class="top">
-    <h1>Computer Vision DJ</h1>
-    <p class="sub">Beat-grid zoom (drag to scrub, wheel to widen/narrow the time window). Tempo/phase sync follows the playing deck. Serato/Rekordbox beat engines are not open source; for research see Essentia, aubio, or librosa beat trackers.</p>
+    <h1 class="site-title" aria-label="Computer Vision DJ">
+      <span class="site-title__primary">CVISION_DJ</span>
+      <span class="site-title__ver" aria-hidden="true">// 0x01</span>
+    </h1>
+    <p class="sub">Waveforms, camera gestures, and tempo / phase tools.</p>
   </header>
+
+  <section class="panel camera-block">
+    <div class="camera-toolbar">
+      <p id="sync-status" class="sync-status" role="status" aria-live="polite"></p>
+      <span id="hand-status" class="hand-status" hidden>Loading hand model…</span>
+      <div class="camera-toolbar__actions">
+        <label class="hand-toggle cam-toolbar-toggle" title="Fullscreen strobes and lasers; uses more GPU when enabled">
+          <input id="reactive-lights-toggle" type="checkbox" />
+          <span>Lights</span>
+        </label>
+        <button id="cam-toggle" class="btn secondary btn-sm" type="button">Start camera</button>
+      </div>
+    </div>
+    <div class="video-shell">
+      <video id="cam-preview" class="cam-preview" playsinline muted></video>
+      <canvas id="hand-overlay" class="hand-overlay" aria-hidden="true"></canvas>
+      <aside class="cam-gesture-panel" id="cam-gesture-panel" aria-label="Hand gesture cheat sheet">
+        <div class="cam-gesture-panel__inner">
+          <div class="cam-gesture-panel__head">
+            <div class="cam-gesture-panel__titles">
+              <p class="cam-gesture-eyebrow">Hand controls</p>
+              <h3 class="cam-gesture-title">Cheat sheet</h3>
+            </div>
+            <button
+              type="button"
+              id="cam-gesture-minimize"
+              class="cam-gesture-minimize-btn"
+              aria-expanded="true"
+              aria-controls="cam-gesture-sheet-body"
+            >
+              Hide
+            </button>
+          </div>
+          <div id="cam-gesture-sheet-body" class="cam-gesture-sheet-body">
+          <p class="cam-gesture-lead">Each gesture applies to that side’s deck while the <strong>camera</strong> is on.</p>
+
+          <section class="cam-gesture-section" aria-label="Deck assignment">
+            <h4 class="cam-gesture-h">Which hand</h4>
+            <ul class="cam-gesture-list cam-gesture-list--compact">
+              <li><span class="cam-gesture-formula">Left hand</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Deck A</span></li>
+              <li><span class="cam-gesture-formula">Right hand</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Deck B</span></li>
+            </ul>
+          </section>
+
+          <section class="cam-gesture-section" aria-label="EQ gestures">
+            <h4 class="cam-gesture-h">EQ bands</h4>
+            <p class="cam-gesture-step">Hold the chord ~0.2s, then <strong>wrist up / down</strong> to ride the knob.</p>
+            <ul class="cam-gesture-list">
+              <li><span class="cam-gesture-formula">Thumb + pinky</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Low EQ</span></li>
+              <li><span class="cam-gesture-formula">Thumb + ring</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Mid EQ</span></li>
+              <li><span class="cam-gesture-formula">Thumb + middle</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">High EQ</span> <span class="cam-gesture-fine">(keep index away from thumb)</span></li>
+            </ul>
+          </section>
+
+          <section class="cam-gesture-section" aria-label="Volume and transport">
+            <h4 class="cam-gesture-h">Volume &amp; play</h4>
+            <p class="cam-gesture-step"><span class="cam-gesture-formula">Thumb + index</span> — hold, then wrist <strong>up / down</strong> for channel volume. <strong>Quick double-tap</strong> = play / pause.</p>
+          </section>
+
+          <section class="cam-gesture-section" aria-label="Jog tempo">
+            <h4 class="cam-gesture-h">Vinyl jog</h4>
+            <p class="cam-gesture-step">While that deck is <strong>playing</strong>: four fingers pointing <strong>down</strong>, move wrist <strong>left</strong> (slow) or <strong>right</strong> (fast) for a temporary tempo nudge.</p>
+          </section>
+
+          <section class="cam-gesture-section" aria-label="Two-hand sync">
+            <h4 class="cam-gesture-h">Both hands</h4>
+            <ul class="cam-gesture-list">
+              <li><span class="cam-gesture-formula">Index tips together</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Tempo match + auto phase</span></li>
+              <li><span class="cam-gesture-formula">Middle tips together</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Phase align only</span></li>
+            </ul>
+          </section>
+
+          <p class="cam-gesture-foot">Pinch <strong>all</strong> fingertips to thumb to release a chord. Crossfader stays on the slider under the decks.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
 
   <section class="panel panel--performance" id="performance-panel">
     <div class="rb-zoom-dual" aria-label="Zoomed waveforms with beat grid">
@@ -184,71 +267,6 @@ app.innerHTML = `
       </div>
     </details>
   </section>
-
-  <section class="panel camera-block">
-    <div class="camera-head">
-      <h2 class="camera-title">Camera</h2>
-      <button id="cam-toggle" class="btn secondary btn-sm" type="button">Start camera</button>
-    </div>
-    <p class="camera-note">Mirrored preview: <strong>left hand = deck A</strong>, <strong>right = deck B</strong>. Quick formulas are on the video overlay. Crossfader: mouse under the decks.</p>
-    <p id="sync-status" class="sync-status" role="status" aria-live="polite"></p>
-    <div class="hand-controls">
-      <label class="hand-toggle">
-        <input id="hand-gestures" type="checkbox" disabled />
-        <span>Hand gestures</span>
-      </label>
-      <span id="hand-status" class="hand-status" hidden>Loading hand model…</span>
-    </div>
-    <div class="video-shell">
-      <video id="cam-preview" class="cam-preview" playsinline muted></video>
-      <canvas id="hand-overlay" class="hand-overlay" aria-hidden="true"></canvas>
-      <aside class="cam-gesture-panel" aria-label="Hand gesture cheat sheet">
-        <div class="cam-gesture-panel__inner">
-          <p class="cam-gesture-eyebrow">Hand controls</p>
-          <h3 class="cam-gesture-title">Cheat sheet</h3>
-          <p class="cam-gesture-lead">Each gesture applies to that side’s deck after you turn <strong>Hand gestures</strong> on.</p>
-
-          <section class="cam-gesture-section" aria-label="Deck assignment">
-            <h4 class="cam-gesture-h">Which hand</h4>
-            <ul class="cam-gesture-list cam-gesture-list--compact">
-              <li><span class="cam-gesture-formula">Left hand</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Deck A</span></li>
-              <li><span class="cam-gesture-formula">Right hand</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Deck B</span></li>
-            </ul>
-          </section>
-
-          <section class="cam-gesture-section" aria-label="EQ gestures">
-            <h4 class="cam-gesture-h">EQ bands</h4>
-            <p class="cam-gesture-step">Hold the chord ~0.2s, then <strong>wrist up / down</strong> to ride the knob.</p>
-            <ul class="cam-gesture-list">
-              <li><span class="cam-gesture-formula">Thumb + pinky</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Low EQ</span></li>
-              <li><span class="cam-gesture-formula">Thumb + ring</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Mid EQ</span></li>
-              <li><span class="cam-gesture-formula">Thumb + middle</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">High EQ</span> <span class="cam-gesture-fine">(keep index away from thumb)</span></li>
-            </ul>
-          </section>
-
-          <section class="cam-gesture-section" aria-label="Volume and transport">
-            <h4 class="cam-gesture-h">Volume &amp; play</h4>
-            <p class="cam-gesture-step"><span class="cam-gesture-formula">Thumb + index</span> — hold, then wrist <strong>up / down</strong> for channel volume. <strong>Quick double-tap</strong> = play / pause.</p>
-          </section>
-
-          <section class="cam-gesture-section" aria-label="Jog tempo">
-            <h4 class="cam-gesture-h">Vinyl jog</h4>
-            <p class="cam-gesture-step">While that deck is <strong>playing</strong>: four fingers pointing <strong>down</strong>, move wrist <strong>left</strong> (slow) or <strong>right</strong> (fast) for a temporary tempo nudge.</p>
-          </section>
-
-          <section class="cam-gesture-section" aria-label="Two-hand sync">
-            <h4 class="cam-gesture-h">Both hands</h4>
-            <ul class="cam-gesture-list">
-              <li><span class="cam-gesture-formula">Index tips together</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Tempo match + auto phase</span></li>
-              <li><span class="cam-gesture-formula">Middle tips together</span> <span class="cam-gesture-arrow">→</span> <span class="cam-gesture-out">Phase align only</span></li>
-            </ul>
-          </section>
-
-          <p class="cam-gesture-foot">Pinch <strong>all</strong> fingertips to thumb to release a chord. Crossfader stays on the slider under the decks.</p>
-        </div>
-      </aside>
-    </div>
-  </section>
 `
 
 const performancePanel = document.querySelector<HTMLElement>('#performance-panel')!
@@ -293,16 +311,73 @@ const eqBLow = document.querySelector<HTMLInputElement>('#eq-b-low')!
 const eqBMid = document.querySelector<HTMLInputElement>('#eq-b-mid')!
 const eqBHigh = document.querySelector<HTMLInputElement>('#eq-b-high')!
 
+function vizUiSnapshot(): VizUiSnapshot {
+  const xf = Number(crossfader.value) / 100
+  return {
+    volA: Number(volA.value) / 100,
+    volB: Number(volB.value) / 100,
+    crossfader: xf,
+    eqLow: Number(eqALow.value) * (1 - xf) + Number(eqBLow.value) * xf,
+    eqMid: Number(eqAMid.value) * (1 - xf) + Number(eqBMid.value) * xf,
+    eqHigh: Number(eqAHigh.value) * (1 - xf) + Number(eqBHigh.value) * xf,
+  }
+}
+
+let disposeReactiveViz: (() => void) | null = null
+
+function clearReactiveVizCanvas(): void {
+  const c = vizCanvas.getContext('2d')
+  if (!c) return
+  const dpr = window.devicePixelRatio || 1
+  vizCanvas.width = Math.floor(window.innerWidth * dpr)
+  vizCanvas.height = Math.floor(window.innerHeight * dpr)
+  vizCanvas.style.width = `${window.innerWidth}px`
+  vizCanvas.style.height = `${window.innerHeight}px`
+  c.setTransform(dpr, 0, 0, dpr, 0, 0)
+  c.fillStyle = '#000000'
+  c.fillRect(0, 0, window.innerWidth, window.innerHeight)
+}
+
+function setReactiveLights(enabled: boolean): void {
+  if (enabled) {
+    if (!disposeReactiveViz) {
+      disposeReactiveViz = startReactiveViz(mixer.analyser, vizCanvas, vizUiSnapshot)
+    }
+  } else {
+    disposeReactiveViz?.()
+    disposeReactiveViz = null
+    clearReactiveVizCanvas()
+  }
+}
+
+const reactiveLightsToggle = document.querySelector<HTMLInputElement>('#reactive-lights-toggle')!
+reactiveLightsToggle.addEventListener('change', () => {
+  setReactiveLights(reactiveLightsToggle.checked)
+})
+window.addEventListener('resize', () => {
+  if (!disposeReactiveViz) clearReactiveVizCanvas()
+})
+clearReactiveVizCanvas()
+
 const camVideo = document.querySelector<HTMLVideoElement>('#cam-preview')!
 const camToggle = document.querySelector<HTMLButtonElement>('#cam-toggle')!
-const handGesturesToggle = document.querySelector<HTMLInputElement>('#hand-gestures')!
 const handStatus = document.querySelector<HTMLSpanElement>('#hand-status')!
 const handOverlay = document.querySelector<HTMLCanvasElement>('#hand-overlay')!
+const camGesturePanel = document.querySelector<HTMLElement>('#cam-gesture-panel')!
+const camGestureMinBtn = document.querySelector<HTMLButtonElement>('#cam-gesture-minimize')!
+
+camGestureMinBtn.addEventListener('click', () => {
+  const collapsed = camGesturePanel.classList.toggle('is-collapsed')
+  camGestureMinBtn.textContent = collapsed ? 'Show' : 'Hide'
+  camGestureMinBtn.setAttribute('aria-expanded', String(!collapsed))
+})
 
 let peaksA: number[] = []
 let peaksB: number[] = []
 let triMiniA: TriBandPeaks | null = null
 let triMiniB: TriBandPeaks | null = null
+let mmA: SignedMmBins | null = null
+let mmB: SignedMmBins | null = null
 let kicksA: number[] = []
 let kicksB: number[] = []
 let raf = 0
@@ -518,6 +593,7 @@ function redrawDeck(
   const effBpm =
     analysis && analysis.bpm > 40 ? analysis.bpm * deck.getPlaybackRate() : undefined
   const tri = deck === deckA ? triMiniA : triMiniB
+  const mm = deck === deckA ? mmA : mmB
   const zoomKey: 'A' | 'B' = canvas === canvasA ? 'A' : 'B'
   const { t0, t1 } = zoomTimeWindow(deck, zoomKey)
   drawWaveformWindowed(
@@ -533,6 +609,7 @@ function redrawDeck(
     playhead,
     effBpm,
     tri,
+    mm,
   )
   timeEl.textContent = `${formatTime(deck.getCurrentTime())} / ${formatTime(deck.duration)}`
 }
@@ -712,6 +789,44 @@ eqBLow.addEventListener('input', () => deckB.setEqLow(Number(eqBLow.value)))
 eqBMid.addEventListener('input', () => deckB.setEqMid(Number(eqBMid.value)))
 eqBHigh.addEventListener('input', () => deckB.setEqHigh(Number(eqBHigh.value)))
 
+const DEMO_A_TITLE =
+  'Selena Gomez, The Marias, benny blanco — Ojos Tristes (Arial Ten Remix) [demo]'
+const DEMO_B_TITLE = 'yukon (mang edit) v1 master [demo]'
+
+function demoAssetUrl(path: string): string {
+  const b = import.meta.env.BASE_URL
+  return (b.endsWith('/') ? b : `${b}/`) + path
+}
+
+function commitLoadedBuffer(
+  deck: Deck,
+  buffer: AudioBuffer,
+  displayName: string,
+  metaEl: HTMLParagraphElement,
+  transportBtn: HTMLButtonElement,
+  setName: (s: string) => void,
+  setPeaks: (p: number[]) => void,
+  setAnalysis: (a: TrackAnalysis) => void,
+): void {
+  setName(displayName)
+  setPeaks(computePeaks(buffer, WAVEFORM_BINS))
+  const mmBins = computeSignedMinMaxBins(buffer, WAVEFORM_BINS)
+  if (deck === deckA) {
+    triMiniA = computeTriBandPeaks(buffer, WAVEFORM_BINS)
+    mmA = mmBins
+    kicksA = computeKickMarkers(buffer)
+  } else {
+    triMiniB = computeTriBandPeaks(buffer, WAVEFORM_BINS)
+    mmB = mmBins
+    kicksB = computeKickMarkers(buffer)
+  }
+  const analysis = analyzeTrack(buffer)
+  setAnalysis(analysis)
+  metaEl.textContent = `BPM ~${analysis.bpm} · ${analysis.keyLabel} (${analysis.camelot}) · estimates`
+  syncTransport(transportBtn, deck)
+  redrawAll()
+}
+
 async function onPickFile(
   file: File | undefined,
   deck: Deck,
@@ -726,19 +841,71 @@ async function onPickFile(
   metaEl.textContent = 'Analyzing…'
   transportBtn.disabled = true
   const buffer = await deck.loadFile(file)
-  setPeaks(computePeaks(buffer, WAVEFORM_BINS))
-  if (deck === deckA) {
-    triMiniA = computeTriBandPeaks(buffer, WAVEFORM_BINS)
-    kicksA = computeKickMarkers(buffer)
-  } else {
-    triMiniB = computeTriBandPeaks(buffer, WAVEFORM_BINS)
-    kicksB = computeKickMarkers(buffer)
+  commitLoadedBuffer(deck, buffer, file.name, metaEl, transportBtn, setName, setPeaks, setAnalysis)
+}
+
+async function loadDemoTracks(): Promise<void> {
+  try {
+    const [rawA, rawB] = await Promise.all([
+      fetch(demoAssetUrl('demo/deck-a.m4a')).then((r) => {
+        if (!r.ok) throw new Error(String(r.status))
+        return r.arrayBuffer()
+      }),
+      fetch(demoAssetUrl('demo/deck-b.mp3')).then((r) => {
+        if (!r.ok) throw new Error(String(r.status))
+        return r.arrayBuffer()
+      }),
+    ])
+    metaA.textContent = 'Loading demo…'
+    metaB.textContent = 'Loading demo…'
+    transportA.disabled = true
+    transportB.disabled = true
+    const [bufA, bufB] = await Promise.all([
+      deckA.loadFromArrayBuffer(rawA),
+      deckB.loadFromArrayBuffer(rawB),
+    ])
+    commitLoadedBuffer(
+      deckA,
+      bufA,
+      DEMO_A_TITLE,
+      metaA,
+      transportA,
+      (s) => {
+        nameA.textContent = s
+      },
+      (p) => {
+        peaksA = p
+      },
+      (a) => {
+        analysisA = a
+      },
+    )
+    commitLoadedBuffer(
+      deckB,
+      bufB,
+      DEMO_B_TITLE,
+      metaB,
+      transportB,
+      (s) => {
+        nameB.textContent = s
+      },
+      (p) => {
+        peaksB = p
+      },
+      (a) => {
+        analysisB = a
+      },
+    )
+  } catch (err) {
+    console.warn('Demo tracks:', err)
+    nameA.textContent = 'No track'
+    nameB.textContent = 'No track'
+    metaA.textContent = 'Load audio — demo files not found.'
+    metaB.textContent = 'Load audio — demo files not found.'
+    syncTransport(transportA, deckA)
+    syncTransport(transportB, deckB)
+    redrawAll()
   }
-  const analysis = analyzeTrack(buffer)
-  setAnalysis(analysis)
-  metaEl.textContent = `BPM ~${analysis.bpm} · ${analysis.keyLabel} (${analysis.camelot}) · estimates`
-  syncTransport(transportBtn, deck)
-  redrawAll()
 }
 
 fileA.addEventListener('change', () => {
@@ -791,25 +958,155 @@ transportB.addEventListener('click', async () => {
   afterTransportChange()
 })
 
+function buildHandGestureLoopOptions(): HandGestureLoopOptions {
+  return {
+    video: camVideo,
+    overlay: handOverlay,
+    crossfader,
+    volA,
+    volB,
+    eqInputs: {
+      A: { low: eqALow, mid: eqAMid, high: eqAHigh },
+      B: { low: eqBLow, mid: eqBMid, high: eqBHigh },
+    },
+    callbacks: {
+      setCrossfader: (t) => mixer.setCrossfader(t),
+      setChannelVolume: (deck, t) => mixer.setChannelVolume(deck, t),
+      toggleTransport: async (deck) => {
+        if (deck === 'A') {
+          if (deckA.isPlaying) deckA.pause()
+          else await deckA.play()
+        } else {
+          if (deckB.isPlaying) deckB.pause()
+          else await deckB.play()
+        }
+        afterTransportChange()
+      },
+      getCrossfader: () => mixer.getCrossfader(),
+      getChannelVolume: (deck) => mixer.getChannelVolume(deck),
+      getEq: (deck, band) => {
+        const el =
+          deck === 'A'
+            ? band === 'low'
+              ? eqALow
+              : band === 'mid'
+                ? eqAMid
+                : eqAHigh
+            : band === 'low'
+              ? eqBLow
+              : band === 'mid'
+                ? eqBMid
+                : eqBHigh
+        return Number(el.value)
+      },
+      setEq: (deck, band, db) => {
+        const v = clampEqDb(db)
+        const d = deck === 'A' ? deckA : deckB
+        const el =
+          deck === 'A'
+            ? band === 'low'
+              ? eqALow
+              : band === 'mid'
+                ? eqAMid
+                : eqAHigh
+            : band === 'low'
+              ? eqBLow
+              : band === 'mid'
+                ? eqBMid
+                : eqBHigh
+        if (band === 'low') d.setEqLow(v)
+        else if (band === 'mid') d.setEqMid(v)
+        else d.setEqHigh(v)
+        el.value = String(v)
+      },
+      getDeckHud: (deck) => {
+        const d = deck === 'A' ? deckA : deckB
+        const title = (deck === 'A' ? nameA : nameB).textContent ?? 'No track'
+        const analysis = deck === 'A' ? analysisA : analysisB
+        const dur = d.duration
+        const cur = d.getCurrentTime()
+        const progress = dur > 0 ? Math.min(1, Math.max(0, cur / dur)) : 0
+        const rate = d.getPlaybackRate()
+        const effBpm = analysis && analysis.bpm > 0 ? analysis.bpm * rate : 0
+        const ph = effBpm > 0 ? beatPhase01(effBpm, cur) : 0
+        const bpmLine = analysis ? `~${Math.round(analysis.bpm * rate)}` : '—'
+        const keyLine = analysis
+          ? `${analysis.keyLabel} · ${analysis.camelot}`
+          : '—'
+        const tempoKeyLine =
+          Math.abs(rate - 1) < 0.0005
+            ? `${rate.toFixed(2)}×`
+            : `${rate.toFixed(3)}× varispeed`
+        return {
+          deckLine: deck === 'A' ? 'DECK A' : 'DECK B',
+          title,
+          bpmLine,
+          keyLine,
+          elapsed: formatClockTenths(cur),
+          remaining: dur > 0 ? `-${formatClockTenths(dur - cur)}` : '—',
+          progress,
+          beatPhase01: ph,
+          playbackRate: rate,
+          tempoKeyLine,
+        }
+      },
+      onTempoMatch: () => applyTempoMatchFromGesture(),
+      onPhaseAlign: () => applyPhaseAlignFromGesture(),
+      isDeckPlaying: (deck) => (deck === 'A' ? deckA : deckB).isPlaying,
+      setJogTempo: (deck, mult) => (deck === 'A' ? deckA : deckB).setJogTempoMultiplier(mult),
+      resetJogTempo: (deck) => (deck === 'A' ? deckA : deckB).resetJogTempoMultiplier(),
+    },
+  }
+}
+
+function stopHandGesturesUi(): void {
+  handStatus.hidden = true
+  stopHandGestureLoop()
+  deckA.resetJogTempoMultiplier()
+  deckB.resetJogTempoMultiplier()
+  performancePanel.classList.remove('hand-gestures-active')
+}
+
+let handGestureLoopLoading = false
+
+function beginHandGesturesAsync(): void {
+  if (!cameraOn || handGestureLoopLoading) return
+  handGestureLoopLoading = true
+  handStatus.hidden = false
+  void startHandGestureLoop(buildHandGestureLoopOptions(), () => cameraOn)
+    .then(() => {
+      handStatus.hidden = true
+      if (cameraOn) {
+        performancePanel.classList.add('hand-gestures-active')
+      }
+    })
+    .catch((err: unknown) => {
+      console.error(err)
+      performancePanel.classList.remove('hand-gestures-active')
+      handStatus.hidden = true
+      deckA.resetJogTempoMultiplier()
+      deckB.resetJogTempoMultiplier()
+      const msg = err instanceof Error ? err.message : 'Hand model failed to load'
+      alert(msg)
+    })
+    .finally(() => {
+      handGestureLoopLoading = false
+    })
+}
+
 camToggle.addEventListener('click', () => {
   if (cameraOn) {
-    handGesturesToggle.checked = false
-    handGesturesToggle.disabled = true
-    stopHandGestureLoop()
-    deckA.resetJogTempoMultiplier()
-    deckB.resetJogTempoMultiplier()
-    performancePanel.classList.remove('hand-gestures-active')
+    stopHandGesturesUi()
     stopWebcamPreview(camVideo)
     disposeHandLandmarker()
     cameraOn = false
     camToggle.textContent = 'Start camera'
-    handStatus.hidden = true
   } else {
     void startWebcamPreview(camVideo).then(
       () => {
         cameraOn = true
         camToggle.textContent = 'Stop camera'
-        handGesturesToggle.disabled = false
+        beginHandGesturesAsync()
       },
       (err: unknown) => {
         console.error(err)
@@ -820,143 +1117,6 @@ camToggle.addEventListener('click', () => {
   }
 })
 
-handGesturesToggle.addEventListener('change', () => {
-  if (!cameraOn) {
-    handGesturesToggle.checked = false
-    return
-  }
-  if (handGesturesToggle.checked) {
-    handGesturesToggle.disabled = true
-    handStatus.hidden = false
-    void startHandGestureLoop(
-      {
-        video: camVideo,
-        overlay: handOverlay,
-        crossfader,
-        volA,
-        volB,
-        eqInputs: {
-          A: { low: eqALow, mid: eqAMid, high: eqAHigh },
-          B: { low: eqBLow, mid: eqBMid, high: eqBHigh },
-        },
-        callbacks: {
-          setCrossfader: (t) => mixer.setCrossfader(t),
-          setChannelVolume: (deck, t) => mixer.setChannelVolume(deck, t),
-          toggleTransport: async (deck) => {
-            if (deck === 'A') {
-              if (deckA.isPlaying) deckA.pause()
-              else await deckA.play()
-            } else {
-              if (deckB.isPlaying) deckB.pause()
-              else await deckB.play()
-            }
-            afterTransportChange()
-          },
-          getCrossfader: () => mixer.getCrossfader(),
-          getChannelVolume: (deck) => mixer.getChannelVolume(deck),
-          getEq: (deck, band) => {
-            const el =
-              deck === 'A'
-                ? band === 'low'
-                  ? eqALow
-                  : band === 'mid'
-                    ? eqAMid
-                    : eqAHigh
-                : band === 'low'
-                  ? eqBLow
-                  : band === 'mid'
-                    ? eqBMid
-                    : eqBHigh
-            return Number(el.value)
-          },
-          setEq: (deck, band, db) => {
-            const v = clampEqDb(db)
-            const d = deck === 'A' ? deckA : deckB
-            const el =
-              deck === 'A'
-                ? band === 'low'
-                  ? eqALow
-                  : band === 'mid'
-                    ? eqAMid
-                    : eqAHigh
-                : band === 'low'
-                  ? eqBLow
-                  : band === 'mid'
-                    ? eqBMid
-                    : eqBHigh
-            if (band === 'low') d.setEqLow(v)
-            else if (band === 'mid') d.setEqMid(v)
-            else d.setEqHigh(v)
-            el.value = String(v)
-          },
-          getDeckHud: (deck) => {
-            const d = deck === 'A' ? deckA : deckB
-            const title = (deck === 'A' ? nameA : nameB).textContent ?? 'No track'
-            const analysis = deck === 'A' ? analysisA : analysisB
-            const dur = d.duration
-            const cur = d.getCurrentTime()
-            const progress = dur > 0 ? Math.min(1, Math.max(0, cur / dur)) : 0
-            const rate = d.getPlaybackRate()
-            const effBpm = analysis && analysis.bpm > 0 ? analysis.bpm * rate : 0
-            const ph = effBpm > 0 ? beatPhase01(effBpm, cur) : 0
-            const bpmLine = analysis ? `~${Math.round(analysis.bpm * rate)}` : '—'
-            const keyLine = analysis
-              ? `${analysis.keyLabel} · ${analysis.camelot}`
-              : '—'
-            const tempoKeyLine =
-              Math.abs(rate - 1) < 0.0005
-                ? `${rate.toFixed(2)}×`
-                : `${rate.toFixed(3)}× varispeed`
-            return {
-              deckLine: deck === 'A' ? 'DECK A' : 'DECK B',
-              title,
-              bpmLine,
-              keyLine,
-              elapsed: formatClockTenths(cur),
-              remaining: dur > 0 ? `-${formatClockTenths(dur - cur)}` : '—',
-              progress,
-              beatPhase01: ph,
-              playbackRate: rate,
-              tempoKeyLine,
-            }
-          },
-          onTempoMatch: () => applyTempoMatchFromGesture(),
-          onPhaseAlign: () => applyPhaseAlignFromGesture(),
-          isDeckPlaying: (deck) => (deck === 'A' ? deckA : deckB).isPlaying,
-          setJogTempo: (deck, mult) => (deck === 'A' ? deckA : deckB).setJogTempoMultiplier(mult),
-          resetJogTempo: (deck) => (deck === 'A' ? deckA : deckB).resetJogTempoMultiplier(),
-        },
-      },
-      () => handGesturesToggle.checked,
-    )
-      .then(() => {
-        handStatus.hidden = true
-        if (handGesturesToggle.checked) {
-          performancePanel.classList.add('hand-gestures-active')
-        }
-      })
-      .catch((err: unknown) => {
-        console.error(err)
-        handGesturesToggle.checked = false
-        performancePanel.classList.remove('hand-gestures-active')
-        handStatus.hidden = true
-        deckA.resetJogTempoMultiplier()
-        deckB.resetJogTempoMultiplier()
-        const msg = err instanceof Error ? err.message : 'Hand model failed to load'
-        alert(msg)
-      })
-      .finally(() => {
-        handGesturesToggle.disabled = false
-      })
-  } else {
-    handStatus.hidden = true
-    stopHandGestureLoop()
-    deckA.resetJogTempoMultiplier()
-    deckB.resetJogTempoMultiplier()
-    performancePanel.classList.remove('hand-gestures-active')
-  }
-})
-
 window.addEventListener('resize', () => {
   redrawAll()
 })
@@ -964,4 +1124,4 @@ window.addEventListener('resize', () => {
 attachZoomScrubWheel(zoomWrapA, deckA, 'A')
 attachZoomScrubWheel(zoomWrapB, deckB, 'B')
 
-redrawAll()
+void loadDemoTracks()
